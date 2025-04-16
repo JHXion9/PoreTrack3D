@@ -1,0 +1,10 @@
+*.pyc
+out
+*.log
+*.png
+*.jpg
+*.pth
+*.txt
+*.gif
+*.json
+temp

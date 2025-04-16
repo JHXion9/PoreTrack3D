@@ -1,0 +1,158 @@
+clc
+clear
+close all
+dist_eyes=1/1.6;
+% 生成关键点的个数,这里之所以填写一万个，是因为eth的原本的一些关键点的bin也是1w3左右
+no_kpt=10000;
+%emotions={"disgust","fear","sadness","surprise","netural","happy"};
+emotions={"EMO-1-shout+laugh"};
+%people={"001","002","003","004","005","006","007","009","008","010","011"};
+% 定义路径
+path = 'C:\Users\verdure\Desktop\test';
+% 获取路径下的所有文件夹
+folders = dir(path);
+% 初始化一个字符串数组来保存文件夹名称
+folderNames = {};
+% 遍历文件夹数组
+for i = 1:length(folders)
+    % 检查是否为文件夹，并且名称不是 '.' 或 '..'
+    if folders(i).isdir && ~ismember(folders(i).name, {'.', '..'})
+        % 获取文件夹的名称
+        folderName = folders(i).name;
+        % 添加到字符串数组中
+        folderNames{end+1} = folderName;
+    end
+end
+% 删除特定的文件夹名称
+%indicesToDelete = strcmp(folderNames, '017') | strcmp(folderNames, '018');
+%folderNames(indicesToDelete) = [];
+%  获得people数组
+people = folderNames;
+
+
+for e =1:1
+    emotion=emotions{e};
+    for p_num=1:length(people)
+    people_num=people{p_num}
+    
+        for cam = 1:16
+                % 跳过11，因为目前11检测不到人脸
+                if cam == 11
+                    continue;
+                end
+                if cam == 9
+                    continue;
+                end
+               %帧数选10 是为了对应前面存储的数据格式，其实选什么都无所谓，只需要写对路径即可
+            for frame=10:10
+            
+            face_path = sprintf('C:/Users/verdure/Desktop/test/%s/%s/%d/%d.bmp', people_num,emotion,frame,cam);
+            image_face = imread(face_path); 
+            image_face = rgb2gray(image_face);
+
+            
+            
+            mask_path = sprintf('C:/Users/verdure/Desktop/test/%s/%s/%d/mask/%d_mask.bmp', people_num,emotion,frame,cam);
+            image_mask = imread(mask_path);  %读取mask
+
+            % 为了加快检测速度，对图像进行缩放
+            scale=2
+            size(image_face)
+            size(image_mask)
+            size_p = size(image_face);
+
+            %裁剪出图片只有人脸的部分
+            %该函数通过输入放大后的h，w和对应的图片和mask，将图片放大后再进行mask截取人脸部分
+            im_crop=func_maskPadding(image_face,image_mask,size_p(2)*scale,size_p(1)*scale); %和原图的宽高比要一致。如1024:1224 == 2048:2448
+
+            %% detect pore
+            %检测毛孔，通过pore的比例检测出一定个数的kptno
+            [frames,descriptors] = func_detect_pore_no(im_crop,no_kpt, 1);
+            
+            %keypoint文件的创建
+            output_dir = sprintf('C:/Users/verdure/Desktop/test/%s/%s/%d/keypoints', people_num,emotion,frame);
+            if exist(output_dir, 'dir') ~= 7
+                % 如果文件夹不存在，则创建文件夹
+                mkdir(output_dir);
+                disp(['Folder created: ', output_dir]);
+            else
+                disp(['Folder already exists: ', output_dir]);
+            end
+
+
+
+            px=frames(1,:);
+            py=frames(2,:);
+            pscale=frames(3,:);
+            pori=frames(4,:);
+            %前面计算出px，py是在放大两倍后的位置进行计算得出的关键点位置，所以我们需要将其缩放回对应的大小以此保存下来
+            px=round(px);
+            py=round(py);
+            px = px / 2;
+            py = py / 2;
+            % 将 px 和 py 转换为 single 类型
+            px = single(px);
+            py = single(py);
+            pscale = single(pscale);
+            py = single(py);
+            %筛选出人脸部位的关键点，因为对图片进行过放缩，可能某些点的位置不对
+%             [mask_y, mask_x] = find(image_mask == 255);
+%             px_col = px';
+%             py_col = py';
+%             valid_indices = ismember([px_col, py_col], [mask_x, mask_y], 'rows');
+%             px_col = px_col(valid_indices);
+%             py_col = py_col(valid_indices);
+%             
+%             
+% 
+%             point = [px_col, py_col];
+
+
+
+
+            point = [px', py',pscale',pori'];
+            
+
+
+
+            % 读取图片
+            img = imread(face_path); % 替换为你的图片文件路径
+            figure;
+            % 显示图片
+            imshow(img);
+            hold on; % 保持图像显示
+            
+            % 定义特征点矩阵，假设你已经有了这个矩阵
+            % 每一行的第一列是x坐标，第二列是y坐标
+            featurePoints = point; % 替换为实际的特征点坐标
+            
+            % 在图片上绘制特征点
+            plot(featurePoints(:,1), featurePoints(:,2), 'ro'); % 'ro'表示红色圆圈标记
+            
+            % 可选：添加特征点的编号
+%             for i = 1:size(featurePoints, 1)
+%                 text(featurePoints(i,1), featurePoints(i,2), num2str(i), 'Color', 'yellow', 'FontSize', 12);
+%             end
+            
+            % 取消保持状态
+            hold off;
+
+            kps_photopath = 'featurePointsImage.png'; % 您可以根据需要修改文件名
+            saveas(gcf, fullfile(output_dir, kps_photopath));
+
+
+
+
+
+
+            % 写成bin 矩阵
+            filename = sprintf('%d.bmp.bin', cam);
+            output_path = fullfile(output_dir, filename);
+            write_keypoints(output_path,point)
+
+            end
+        end
+    end
+end
+
+

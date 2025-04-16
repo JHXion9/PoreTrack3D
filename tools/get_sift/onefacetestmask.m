@@ -1,0 +1,1 @@
+mask_path = sprintf('C:/Users/verdure/Desktop/test/mask/4_mask.bmp');
