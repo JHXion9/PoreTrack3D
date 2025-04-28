@@ -8,6 +8,8 @@ import torch
 import imageio
 from collections import Counter
 import trimesh
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 from pyembree import rtcore_scene as rtcs
 from pyembree.mesh_construction import TriangleMesh
 
@@ -472,7 +474,7 @@ def getfromvideo(opt):
     for i, cam in enumerate(cam_identifiers):
         if i == opt.base_view-1:
             # print(f'/media/DGST_data/raw_data/pore/{id}/{seq_name}/{cam}')
-            cut_video(f'/media/DGST_data/raw_data/eyes/{opt.people_id}/{opt.seq_name}/{cam}', f'/media/Nersemble/video/{opt.people_id}/{opt.seq_name}/cut_{cam}', opt.frame_num)
+            cut_video(f'/media/DGST_data/raw_data/{opt.people_id}/{opt.seq_name}/{cam}', f'/media/Nersemble/video/{opt.people_id}/{opt.seq_name}/cut_{cam}', opt.frame_num)
             video = read_video_from_path(f'/media/Nersemble/video/{opt.people_id}/{opt.seq_name}/cut_{cam}')
             video = torch.from_numpy(video).permute(0, 3, 1, 2)[None].float()
             
@@ -1325,62 +1327,297 @@ def full_match_matrices(match_matrices_file1, keypoints_file1, match_matrices_fi
 
     return completed_matrices
 
-def save_all_trajectories(all_keypoints, all_match_matrices, save_path):
+def save_all_trajectories2D(all_keypoints, all_match_matrices, save_path):
     """
-    保存所有轨迹信息，并按轨迹长度从大到小排序。
-    将 NumPy 数组转换为 Python 列表。
+    保存所有独立轨迹信息，按轨迹长度从大到小排序，确保轨迹间无重叠。
 
     Args:
-        all_keypoints (list): 包含所有帧关键点位置信息的列表。
-        all_match_matrices (list): 包含所有帧匹配矩阵的列表。
-        save_path (str): 保存路径
+        all_keypoints (list): 所有帧的关键点位置。
+        all_match_matrices (list): 所有帧的匹配矩阵。
+        save_path (str): 保存路径。
 
     Returns:
-        dict: 包含所有轨迹信息的字典，按长度降序排列。
+        int: 总轨迹数量。
     """
     trajectories = {}
     trajectory_id_counter = 0
     num_frames = len(all_keypoints)
+    # 初始化已使用关键点的标记
+    used_keypoints = [set() for _ in range(num_frames)]
 
-    # 遍历所有可能的起始帧
+    # 遍历所有可能的起始帧（确保有下一帧）
     for start_frame_index in range(num_frames - 1):
-        num_keypoints = len(all_keypoints[start_frame_index])
+        current_frame_kps = all_keypoints[start_frame_index]
+        num_keypoints = len(current_frame_kps)
+        
         # 遍历当前帧的所有关键点
         for start_keypoint_index in range(num_keypoints):
-            current_keypoint = start_keypoint_index
-            match_length = 0
-            # 将 NumPy 数组转换为 Python 列表
-            keypoints_trajectory = [all_keypoints[start_frame_index][start_keypoint_index].tolist()]
+            # 跳过已使用的关键点
+            if start_keypoint_index in used_keypoints[start_frame_index]:
+                continue
+            
+            keypoints_traj = []
+            keypoint_indices_traj = []
+            frames_in_traj = []
+            current_frame = start_frame_index
+            current_kp = start_keypoint_index  # 初始化为 Python int 类型
 
-            # 从当前起始帧开始，遍历后续帧，查找匹配轨迹
-            for next_frame in range(start_frame_index, num_frames - 1):
-                match_matrix = np.array(all_match_matrices[next_frame])
+            # 添加起始关键点（确保转换为 Python 类型）
+            keypoints_traj.append([float(x) for x in all_keypoints[current_frame][current_kp]])
+            keypoint_indices_traj.append(int(current_kp))
+            frames_in_traj.append(int(current_frame))
 
-                if current_keypoint >= match_matrix.shape[0]:
+            # 追踪后续帧的匹配
+            while True:
+                # 检查是否还有下一帧
+                if current_frame >= num_frames - 1:
+                    break
+                next_frame = current_frame + 1
+                match_matrix = np.array(all_match_matrices[current_frame])
+
+                # 检查当前关键点是否在匹配矩阵范围内
+                if current_kp >= match_matrix.shape[0]:
                     break
 
-                next_keypoint_indices = np.where(match_matrix[current_keypoint] == 1)[0]
+                # 查找匹配的下一个关键点
+                next_kps = np.where(match_matrix[current_kp] == 1)[0]
+                if not next_kps.size:
+                    break  # 无匹配
 
-                if next_keypoint_indices.size == 0:
+                next_kp = int(next_kps[0])  # 显式转换为 Python int
+
+                # 检查下一帧的关键点是否有效且未被使用
+                if (next_kp >= len(all_keypoints[next_frame])) or (next_kp in used_keypoints[next_frame]):
                     break
 
-                match_length += 1
-                current_keypoint = next_keypoint_indices[0]
-                # 将 NumPy 数组转换为 Python 列表
-                keypoints_trajectory.append(all_keypoints[next_frame + 1][current_keypoint].tolist())
+                # 记录关键点（确保转换为 Python 类型）
+                keypoints_traj.append([float(x) for x in all_keypoints[next_frame][next_kp]])
+                keypoint_indices_traj.append(int(next_kp))
+                frames_in_traj.append(int(next_frame))
 
-            # 如果轨迹长度大于0,说明存在轨迹
-            if match_length > 0:
+                # 移动到下一帧
+                current_frame = next_frame
+                current_kp = next_kp  # 已经是 Python int 类型
+
+            # 仅保存长度≥2的轨迹
+            trajectory_length = len(keypoints_traj)
+            if trajectory_length >= 2:
+                # 标记所有已使用的关键点
+                for frame, kp_idx in zip(frames_in_traj, keypoint_indices_traj):
+                    used_keypoints[frame].add(kp_idx)
+                # 记录轨迹（确保所有值为 Python 原生类型）
                 trajectories[trajectory_id_counter] = {
-                    "start_frame": start_frame_index,
-                    "length": match_length + 1,
-                    "keypoints": keypoints_trajectory  # 已经是列表
+                    "start_frame": int(start_frame_index),
+                    "length": int(trajectory_length),
+                    "keypoints": keypoints_traj,
+                    "keypoint_indices": [int(x) for x in keypoint_indices_traj]  # 二次确保类型
                 }
                 trajectory_id_counter += 1
 
-
-    # 按轨迹长度从大到小排序
-    sorted_trajectories = dict(sorted(trajectories.items(), key=lambda item: item[1]['length'], reverse=True))
-    with open(os.path.join(save_path,'all_trajectory.json'), 'w') as f:
+    # 按轨迹长度排序
+    sorted_trajectories = dict(sorted(trajectories.items(), key=lambda x: x[1]['length'], reverse=True))
+    # 保存到文件
+    with open(os.path.join(save_path, 'all_trajectory2D.json'), 'w') as f:
         json.dump(sorted_trajectories, f, indent=4)
+    
     return trajectory_id_counter
+
+def save_all_trajectories3D(trajectories_2d_path, keypoints_3d_list, output_path):
+    """
+    从3D关键点列表中提取轨迹信息
+    
+    参数:
+        trajectories_2d_path: 包含2D轨迹信息的JSON文件路径
+        keypoints_3d_list: 三维关键点列表，结构为[帧][关键点][坐标]
+        output_path: 输出目录路径
+    """
+    # 加载2D轨迹信息
+    with open(trajectories_2d_path, 'r') as f:
+        trajectories_2d = json.load(f)
+    
+    trajectories_3d = {}
+    
+    for traj_id, traj_info in trajectories_2d.items():
+        start_frame = traj_info["start_frame"]
+        length = traj_info["length"]
+        keypoint_indices = traj_info["keypoint_indices"]
+        
+        # 检查帧范围是否有效
+        if start_frame + length > len(keypoints_3d_list):
+            print(f"警告: 轨迹 {traj_id} 超出3D关键点列表范围")
+            continue
+        
+        # 提取3D关键点
+        keypoints_3d = []
+        for i in range(length):
+            frame_idx = start_frame + i
+            kp_idx = keypoint_indices[i]
+            
+            # 检查关键点索引是否有效
+            if kp_idx >= len(keypoints_3d_list[frame_idx]):
+                print(f"警告: 轨迹 {traj_id} 第{frame_idx}帧的关键点索引{kp_idx}超出范围")
+                keypoints_3d.append([0, 0, 0])  # 无效点用0填充
+                continue
+            
+            # 获取关键点并转换为列表
+            kp = keypoints_3d_list[frame_idx][kp_idx]
+            if isinstance(kp, np.ndarray):
+                kp = kp.tolist()
+            keypoints_3d.append(kp)
+        
+        # 构建3D轨迹信息
+        trajectories_3d[traj_id] = {
+            "start_frame": start_frame,
+            "length": length,
+            "keypoints": keypoints_3d,
+            "keypoint_indices": keypoint_indices
+        }
+    
+    # 确保输出目录存在
+    os.makedirs(output_path, exist_ok=True)
+    save_pth = os.path.join(output_path, "all_trajectory3D.json")
+    
+    # 保存结果
+    with open(save_pth, 'w') as f:
+        json.dump(trajectories_3d, f, indent=4)
+    
+    print(f"3D轨迹信息已保存到 {save_pth}")
+
+def visualize_3Dtrajectories(tra_file, save_path="./", max_visible_length=5):
+    """
+    可视化3D轨迹数据，并保存为GIF动画，限制可视化轨迹长度为max_visible_length帧。
+
+    Args:
+        trajectory_data (dict): 包含轨迹数据的字典。
+        output_path (str): GIF动画的保存路径。默认为 "trajectory.gif"。
+        max_visible_length (int): 可视化轨迹的最大长度（帧数）。 默认为15。
+    """
+    with open(tra_file, 'r') as f:
+        trajectory_data = json.load(f)
+
+    # 预处理数据
+    max_length = max(t["length"] for t in trajectory_data.values())
+    max_end_frame = max(t["start_frame"] + t["length"] - 1 for t in trajectory_data.values())
+
+    # 创建3D画布
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # 设置坐标轴范围
+    all_points = [kp for traj in trajectory_data.values() for kp in traj["keypoints"]]
+    if all_points:
+        ax.set_xlim(min(p[0] for p in all_points), max(p[0] for p in all_points))
+        ax.set_ylim(min(p[1] for p in all_points), max(p[1] for p in all_points))
+        ax.set_zlim(min(p[2] for p in all_points), max(p[2] for p in all_points))
+    else:
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(-1, 1)
+
+    # 预创建所有轨迹的线对象
+    lines = {}
+    for traj_id, traj in trajectory_data.items():
+        color = "green" if traj["length"] == max_length else "red"
+        line, = ax.plot([], [], [],
+                       color=color,
+                       marker='o',
+                       markersize=1,
+                       linewidth=1,
+                       alpha=0.7)
+        lines[traj_id] = line
+
+    def update_frame(t):
+        """更新每一帧的显示"""
+        ax.set_title(f"Current Frame: {t}")
+
+        for traj_id, traj in trajectory_data.items():
+            start = traj["start_frame"]
+            length = traj["length"]
+            keypoints = traj["keypoints"]
+
+            # 计算当前应显示的关键点数量
+            if t < start:
+                visible_points = 0
+            else:
+                visible_points = min(t - start + 1, length)
+
+            # 限制最大可见长度
+            visible_points = min(visible_points, max_visible_length)
+
+            # 计算要显示的关键点起始索引
+            start_index = max(0, (t - start + 1) - max_visible_length)  # 关键改动
+
+            # 更新线数据
+            if visible_points > 0:
+                xs = [p[0] for p in keypoints[start_index:start_index + max_visible_length]] #关键改动
+                ys = [p[1] for p in keypoints[start_index:start_index + max_visible_length]] #关键改动
+                zs = [p[2] for p in keypoints[start_index:start_index + max_visible_length]] #关键改动
+            else:
+                xs, ys, zs = [], [], []
+
+            lines[traj_id].set_data(xs, ys)
+            lines[traj_id].set_3d_properties(zs)
+
+        return list(lines.values())
+
+    # 创建动画
+    ani = animation.FuncAnimation(
+        fig,
+        update_frame,
+        frames=range(max_end_frame + 1),
+        interval=50,
+        blit=True
+    )
+
+    output_path = os.path.join(save_path, "trajectory.gif")
+    # 保存为GIF
+    ani.save(output_path, writer='pillow', fps=20)
+
+    plt.close(fig)
+
+    print(f"动画已保存到: {output_path}")
+
+def plot_trajectory_length_histogram(file_path, save_path="./"):
+    """
+    绘制轨迹长度的直方图，并在右上角显示总数量及 length > 10 的数量
+    
+    参数:
+        file_path: 包含轨迹数据的JSON文件路径
+    """
+    # 从文件中读取数据
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    
+    # 提取所有 length 值
+    lengths = [item["length"] for item in data.values()]
+    total_trajectories = len(lengths)  # 计算总轨迹数量
+    long_trajectories = sum(1 for l in lengths if l >= 10)  # 计算 length > 10 的数量
+    
+    # 设置区间（每隔5个单位）
+    bins = np.arange(10, max(lengths) + 6, 5)
+    
+    # 统计每个区间内的 length 数量
+    hist, bin_edges = np.histogram(lengths, bins=bins)
+    
+    # 绘制直方图
+    plt.figure(figsize=(10, 6))
+    plt.bar(bin_edges[:-1], hist, width=5, align='edge', edgecolor='black')
+    
+    # 标明具体值
+    for i in range(len(hist)):
+        plt.text(bin_edges[i] + 2.5, hist[i], str(hist[i]), ha='center', va='bottom')
+    
+    # 在右上角显示总数量及 length > 10 的数量
+    info_text = f'Total: {total_trajectories}\nLength >= 10:  {long_trajectories}'
+    plt.text(0.95, 0.95, info_text, 
+             transform=plt.gca().transAxes,
+             ha='right', va='top',
+             bbox=dict(facecolor='white', alpha=0.8))
+    
+    plt.xlabel("Length")
+    plt.ylabel("Frequency")
+    plt.title("Histogram of Trajectory Lengths")
+    plt.xticks(bins)
+    # plt.grid(axis='y', alpha=0.5)
+    
+    plt.savefig(os.path.join(save_path, "trajectory_length_histogram.png"), dpi=300)

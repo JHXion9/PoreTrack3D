@@ -375,7 +375,7 @@ def get_descriptors(gpu_id, patch_folder_path, patch_save_path):
     net_modelpath = '/media/Trajectory3D/models/net-best.pth'
     model = HyNet().eval()
     model.to(device)
-    model.load_state_dict(torch.load(net_modelpath))
+    model.load_state_dict(torch.load(net_modelpath, map_location=device))
 
     #读入patch数据
     batch_size = 512

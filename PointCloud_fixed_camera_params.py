@@ -37,10 +37,10 @@ def process_time_step(name, start_step, end_step, completed_steps, lock):
 if __name__ == '__main__':  # 确保在 if __name__ == '__main__': 块中运行多进程代码
     start_time = time.time()  # 记录开始时间
     # 你的参数
-    human_number = '056'
+    human_number = '031'
     dataset_call_matlab = '/media/DGST_data/Test_Data'
     kpts_number = 10000
-    times = 20
+    times = 1
     gpu_id = 0
     num_processes = 15 # 进程数
 
@@ -92,8 +92,7 @@ if __name__ == '__main__':  # 确保在 if __name__ == '__main__': 块中运行�
     # assert 0
 
     # # 循环跑match处理   
-    for frame in range(1
-                       , times+1):
+    for frame in range(1, times+1):
         loop = True
         Loop_max = 0
         patch_folder_path, patch_save_path = get_patch(dataset_call_matlab, human_number, frame)
