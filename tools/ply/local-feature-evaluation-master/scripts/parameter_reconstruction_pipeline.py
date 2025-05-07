@@ -192,6 +192,7 @@ def reconstruct(args):
                             "--BundleAdjustment.refine_focal_length", '1',
                             "--BundleAdjustment.refine_principal_point", '1',
                             "--BundleAdjustment.refine_extrinsics", '1',
+                            "--BundleAdjustment.refine_extra_params", '0',
                             ],
                             stdout=f_ba, stderr=f_ba) # 重定向 stdout 和 stderr 到文件
 
@@ -210,12 +211,16 @@ def reconstruct(args):
         print("开始导入相机参数")
         camTodatabase(os.path.join(created_sparse_path, "cameras.txt"), database_path)
         print("导入相机参数完成")
-        subprocess.call([os.path.join(args.colmap_path, "colmap"),
-                        "point_triangulator",
-                        "--database_path", database_path,
-                        "--image_path", image_path,
-                        "--input_path", created_sparse_path,
-                        "--output_path", os.path.join(sparse_path,'0'),])
+
+        with open('./log_file_point_triangulator.txt', "w") as f_pt:
+            subprocess.call([os.path.join(args.colmap_path, "colmap"),
+                            "point_triangulator",
+                            "--database_path", database_path,
+                            "--image_path", image_path,
+                            "--input_path", created_sparse_path,
+                            "--output_path", os.path.join(sparse_path,'0'),
+                            ],
+                            stdout=f_pt, stderr=f_pt)
         
         subprocess.call([os.path.join(args.colmap_path, "colmap"),
                             "bundle_adjuster",
@@ -246,24 +251,38 @@ def reconstruct(args):
         os.makedirs(workspace_path)
 
     # Run the dense reconstruction.
+    with open('./log_file_image_undistorter.txt', "w") as f_ut:
+        subprocess.call([os.path.join(args.colmap_path, "colmap"),
+                        "image_undistorter",
+                        "--image_path", image_path,
+                        "--input_path", largest_model_path,
+                        "--output_path", workspace_path,
+                        "--max_image_size", "1200",
+                        ],
+                            stdout=f_ut, stderr=f_ut)
+        
+    with open('./log_file_patch_match_stereo.txt', "w") as f_ut:
+        subprocess.call([os.path.join(args.colmap_path, "colmap"),
+                        "patch_match_stereo",
+                        "--workspace_path", workspace_path,
+                        "--PatchMatchStereo.geom_consistency", "false",
+                       ],
+                            stdout=f_ut, stderr=f_ut)
+        
     subprocess.call([os.path.join(args.colmap_path, "colmap"),
-                     "image_undistorter",
-                     "--image_path", image_path,
-                     "--input_path", largest_model_path,
-                     "--output_path", workspace_path,
-                     "--max_image_size", "1000"])
+                        "model_converter",
+                        "--input_path", os.path.join(workspace_path,'sparse'),
+                        "--output_path", os.path.join(workspace_path,'sparse'),
+                        "--output_type", "TXT"])
 
-    subprocess.call([os.path.join(args.colmap_path, "colmap"),
-                     "patch_match_stereo",
-                     "--workspace_path", workspace_path,
-                     "--PatchMatchStereo.geom_consistency", "false"])
-
-    subprocess.call([os.path.join(args.colmap_path, "colmap"),
-                     "stereo_fusion",
-                     "--workspace_path", workspace_path,
-                     "--input_type", "photometric",
-                     "--output_path", os.path.join(workspace_path, "fused.ply"),
-                     "--StereoFusion.min_num_pixels", "5"])
+    with open('./log_file_stereo_fusion.txt', "w") as f_ut:
+        subprocess.call([os.path.join(args.colmap_path, "colmap"),
+                        "stereo_fusion",
+                        "--workspace_path", workspace_path,
+                        "--input_type", "photometric",
+                        "--output_path", os.path.join(workspace_path, "fused.ply"),
+                        ],
+                            stdout=f_ut, stderr=f_ut)
     
     subprocess.call([os.path.join(args.colmap_path, "colmap"),
                     "model_converter",

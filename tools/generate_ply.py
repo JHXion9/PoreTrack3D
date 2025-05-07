@@ -107,6 +107,25 @@ def save_cameras_simple_radial_txt_one(f1, cx, cy, k, save_pth, width=2200, heig
         for i in range(1,17):
             f.write(f"{i} {camera_model} {width} {height} {f1} {cx} {cy} {k}\n")
 
+def save_cameras_simple_pinhole_txt_one(f1, cx, cy, save_pth, width=2200, height=3208, camera_model="SIMPLE_PINHOLE"):
+    """
+    创建COLMAP格式的cameras.txt文件
+    
+    参数:
+        fx, fy, cx, cy: 相机内参
+        save_pth: 保存路径
+        width: 图像宽度(默认1280)
+        height: 图像高度(默认720)
+        camera_model: 相机模型(默认"PINHOLE")
+    """
+    with open(save_pth, 'w') as f:
+        # 写入文件头
+        f.write("# Camera list with one line of data per camera:\n")
+        f.write("# CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[f,cx,cy,k]\n")
+        f.write("# Number of cameras: 16\n")
+        for i in range(1,17):
+            f.write(f"{i} {camera_model} {width} {height} {f1} {cx} {cy}\n")
+
 def save_cameras_simple_radial_txt(params, save_pth, width=2200, height=3208, camera_model="PINHOLE"):
     """
     创建COLMAP格式的cameras.txt文件
@@ -275,7 +294,9 @@ def get_camera_params_from_json(json_pth, save_path):
     cameras_txt_pth = os.path.join(save_path, 'cameras.txt')
     points3D_txt_pth = os.path.join(save_path, 'points3D.txt')
     save_images_txt(Q, T, images_txt_pth)
-    save_cameras_simple_radial_txt_one(f, cx, cy, 0, cameras_txt_pth)
+    save_cameras_simple_radial_txt_one(f, cx, cy, 0.0001, cameras_txt_pth)
+    # save_cameras_txt(fx, fy, cx, cy, cameras_txt_pth)
+    # save_cameras_simple_pinhole_txt_one(f, cx, cy, cameras_txt_pth)
     save_points3D_txt(points3D_txt_pth)
     
 def get_camera_params_from_exist_colmap(source_pth, save_path):
