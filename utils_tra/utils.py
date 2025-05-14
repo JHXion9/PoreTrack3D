@@ -47,13 +47,11 @@ def cut_video(video_path, output_path, frame_num):
     cap.release()
     out.release()
 
-def get_k_w2c(datadir, cam_id, timestamp):
-    if os.path.exists(os.path.join(datadir, str(timestamp), "psiftproject/sparse/1/images.bin")):
-        cameras_extrinsic_file = os.path.join(datadir, str(timestamp), "psiftproject/sparse/1/images.bin")
-        cameras_intrinsic_file = os.path.join(datadir, str(timestamp), "psiftproject/sparse/1/cameras.bin")
-    else:
-        cameras_extrinsic_file = os.path.join(datadir, str(timestamp), "psiftproject/sparse/0/images.bin")
-        cameras_intrinsic_file = os.path.join(datadir, str(timestamp), "psiftproject/sparse/0/cameras.bin")
+def get_k_w2c(datadir, cam_id):
+
+    cameras_extrinsic_file = os.path.join(datadir, "sparse_/images.bin")
+    cameras_intrinsic_file = os.path.join(datadir, "sparse_/cameras.bin")
+
     cam_extrinsics = read_extrinsics_binary(cameras_extrinsic_file)
     cam_intrinsics = read_intrinsics_binary(cameras_intrinsic_file)
     value = f'{cam_id}.png'
@@ -136,7 +134,7 @@ def undistort_point(image_points, params):
 
     return np.stack([x_u, y_u], axis=-1)  # 使用np.stack组合成 (N, 2) 数组
 
-def get_3d_coordinates(mesh_path, params, R, T, keypoints_2d):
+def get_3d_coordinates_simple_radial(mesh_path, params, R, T, keypoints_2d):
     """
     计算相机视角下二维关键点对应的Mesh上的三维坐标。
 
@@ -216,6 +214,83 @@ def get_3d_coordinates(mesh_path, params, R, T, keypoints_2d):
 
     return valid_keypoints_2d, valid_intersections_world, valid_intersections_camera
 
+def get_3d_coordinates(mesh_path, params, R, T, keypoints_2d):
+    """
+    计算相机视角下二维关键点对应的Mesh上的三维坐标。
+
+    Args:
+        mesh_path (str): .ply文件的路径。
+        params (list): 相机内参 [fx, cx, cy, k]。
+        R (np.ndarray): 相机外参旋转矩阵，形状为 (3, 3)。
+        T (np.ndarray): 相机外参平移向量，形状为 (3, 1)。
+        keypoints_2d (np.ndarray): 二维关键点坐标，形状为 (N, 2)。
+
+    Returns:
+        tuple: (valid_keypoints_2d, valid_intersections), 其中：
+            - valid_keypoints_2d (np.ndarray):  形状为 (M, 2) 的有效二维关键点数组 (M <= N)。
+            - valid_intersections (np.ndarray): 形状为 (M, 3) 的有效三维交点数组。
+    """
+    keypoints_2d = np.array(keypoints_2d)
+
+    # 1. 加载Mesh
+    mesh = trimesh.load_mesh(mesh_path)
+    triangles = mesh.vertices[mesh.faces]
+
+    # 2. 构建Embree场景
+    scene = rtcs.EmbreeScene()
+    mesh_embree = TriangleMesh(scene, triangles.astype(np.float32))
+
+    # 3. 相机参数 (简化：假设 fx=fy)
+    fx=fy = params[0]
+    cx = params[1]
+    cy = params[2]
+   
+
+    # 4. 去畸变
+    # undistorted_keypoints = undistort_point(keypoints_2d, [f, cx, cy, k])
+
+    # 5. 构建射线 (考虑外参)
+    # 相机中心在世界坐标系下的坐标:
+    origin = -R.T @ T  # (3, 1)
+    origin = origin.reshape(3)  # 转换为 (3,)，方便后续计算
+
+    # 射线方向 (在相机坐标系下)
+    x = (keypoints_2d[:, 0] - cx) / fx
+    y = (keypoints_2d[:, 1] - cy) / fy
+    direction_camera = np.stack([x, y, np.ones_like(x)], axis=-1)  # (N, 3)
+
+    # 将射线方向从相机坐标系转换到世界坐标系
+    direction_world = (R.T @ direction_camera.T).T  # (N, 3)
+
+    # 单位化世界坐标系下的方向向量
+    direction_world = direction_world / np.linalg.norm(direction_world, axis=1, keepdims=True)
+
+    # 6. 射线求交
+    origins = np.tile(origin, (keypoints_2d.shape[0], 1))  # (N, 3)
+    res = scene.run(origins.astype(np.float32), direction_world.astype(np.float32), output=1)
+
+    # 7. 获取交点和有效关键点
+    valid_intersections = []
+    valid_keypoints_2d = []
+
+    valid_intersections_mask = res['geomID'] != -1 # (N,) boolean array
+    valid_indices = np.where(valid_intersections_mask)[0]  # 获取有效交点的索引
+    
+    if valid_indices.size > 0:   # 确保存在有效交点才执行计算
+        primIDs = res['primID'][valid_indices]
+        u = res['u'][valid_indices]
+        v = res['v'][valid_indices]
+        w = 1 - u - v
+
+        # 使用有效索引进行批量计算
+        valid_intersections = (w[:, None] * triangles[primIDs, 0] +
+                                         u[:, None] * triangles[primIDs, 1] +
+                                         v[:, None] * triangles[primIDs, 2])
+
+        valid_keypoints_2d = keypoints_2d[valid_indices]
+
+    return valid_keypoints_2d, valid_intersections
+
 def get_3d_coordinates_flame(mesh_path, params, R, T, keypoints_2d):
     """
     计算相机视角下二维关键点对应的Mesh上的三维坐标。
@@ -294,7 +369,89 @@ def get_3d_coordinates_flame(mesh_path, params, R, T, keypoints_2d):
 
     return valid_keypoints_2d, valid_intersections
 
-def reproject_points(params, R, t, world_points):
+def get_3d_coordinates_batch(mesh_paths, params, R, T, keypoints_2d):
+    """
+    计算相机视角下二维关键点对应的Mesh上的三维坐标（批量处理150帧）。
+
+    Args:
+        mesh_paths (list): 包含150帧的.ply文件路径的列表。
+        params (list): 相机内参 [fx, cx, cy, k]。
+        R (np.ndarray): 相机外参旋转矩阵，形状为 (3, 3)。
+        T (np.ndarray): 相机外参平移向量，形状为 (3, 1)。
+        keypoints_2d (np.ndarray): 二维关键点坐标，形状为 (150, 2)。
+
+    Returns:
+        tuple: (valid_keypoints_2d, valid_intersections), 其中：
+            - valid_keypoints_2d (np.ndarray): 形状为 (150, 2) 的二维关键点数组，无效点用NaN填充
+            - valid_intersections (np.ndarray): 形状为 (150, 3) 的三维交点数组，无效点用NaN填充
+    """
+    assert len(mesh_paths) == 150 and keypoints_2d.shape == (150, 2), "输入必须是150帧的数据"
+    
+    # 初始化输出数组，用NaN表示无效值
+    valid_keypoints_2d = np.full((150, 2), np.nan)
+    valid_intersections = np.full((150, 3), np.nan)
+    
+    # 相机参数 (假设 fx=fy)
+    fx = fy = params[0]
+    cx = params[1]
+    cy = params[2]
+    
+    # 预先计算相机中心在世界坐标系下的坐标
+    origin = -R.T @ T  # (3, 1)
+    origin = origin.reshape(3)  # 转换为 (3,)
+    
+    for i in range(150):
+        try:
+            # 1. 加载当前帧的Mesh
+            mesh = trimesh.load_mesh(mesh_paths[i])
+            triangles = mesh.vertices[mesh.faces]
+            
+            # 2. 构建Embree场景
+            scene = rtcs.EmbreeScene()
+            mesh_embree = TriangleMesh(scene, triangles.astype(np.float32))
+            
+            # 3. 处理当前帧的2D关键点
+            current_kp = keypoints_2d[i]
+            
+            # 4. 构建射线 (考虑外参)
+            # 射线方向 (在相机坐标系下)
+            x = (current_kp[0] - cx) / fx
+            y = (current_kp[1] - cy) / fy
+            direction_camera = np.array([x, y, 1.0])
+            
+            # 将射线方向从相机坐标系转换到世界坐标系
+            direction_world = R.T @ direction_camera
+            
+            # 单位化世界坐标系下的方向向量
+            direction_world = direction_world / np.linalg.norm(direction_world)
+            
+            # 5. 射线求交
+            res = scene.run(np.array([origin]).astype(np.float32), 
+                          np.array([direction_world]).astype(np.float32), 
+                          output=1)
+            
+            # 6. 处理结果
+            if res['geomID'][0] != -1:  # 有交点
+                primID = res['primID'][0]
+                u = res['u'][0]
+                v = res['v'][0]
+                w = 1 - u - v
+                
+                intersection = (w * triangles[primID, 0] +
+                              u * triangles[primID, 1] +
+                              v * triangles[primID, 2])
+                
+                # 保存有效结果
+                valid_keypoints_2d[i] = current_kp
+                valid_intersections[i] = intersection
+                
+        except Exception as e:
+            print(f"处理第{i}帧时出错: {str(e)}")
+            continue
+    
+    return valid_keypoints_2d, valid_intersections
+
+def reproject_points_simple_radial(params, R, t, world_points):
     """
     使用SIMPLE_RADIAL相机模型将世界坐标系下的3D点投影到像素坐标 (优化版本，使用NumPy广播).
 
@@ -343,7 +500,7 @@ def reproject_points(params, R, t, world_points):
     points2d = np.stack([x, y], axis=-1)  # 形状 (N, 2)
     return points2d
 
-def reproject_points_pinhole(params, R, t, world_points):
+def reproject_points(params, R, t, world_points):
     """
     使用SIMPLE_RADIAL相机模型将世界坐标系下的3D点投影到像素坐标 (优化版本，使用NumPy广播).
 
@@ -360,7 +517,8 @@ def reproject_points_pinhole(params, R, t, world_points):
         ValueError: 当投影点的深度Z为0时抛出
     """
     # 解析相机参数
-    fx, fy, cx, cy = params
+    f, cx, cy = params
+    fx,fy = f,f
 
     # 将世界坐标转换为相机坐标系
     
@@ -453,6 +611,7 @@ def filter_3dpointcloud(pts2d, p3d_path, params, R, T, threshold=5, visual = Fal
     return np.array(filtered_pts2d), np.array(filtered_p3ds)
 
 def getfromvideo(opt):
+    from tqdm import tqdm
     cam1 = 'cam_222200042.mp4'
     cam2 = 'cam_222200044.mp4'
     cam3 = 'cam_222200046.mp4'
@@ -471,7 +630,7 @@ def getfromvideo(opt):
     cam16 = 'cam_221501007.mp4'
     cam_identifiers = [cam1, cam2, cam3, cam4, cam5, cam6, cam7, cam8, cam9, cam10, cam11, cam12, cam13, cam14, cam15, cam16]
             # 遍历所有摄像头标识符
-    for i, cam in enumerate(cam_identifiers):
+    for i, cam in tqdm(enumerate(cam_identifiers), desc="loading videos"):
         if i == opt.base_view-1:
             # print(f'/media/DGST_data/raw_data/pore/{id}/{seq_name}/{cam}')
             cut_video(f'/media/DGST_data/raw_data/{opt.people_id}/{opt.seq_name}/{cam}', f'/media/Nersemble/video/{opt.people_id}/{opt.seq_name}/cut_{cam}', opt.frame_num)

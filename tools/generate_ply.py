@@ -501,6 +501,7 @@ def get_ply(project_path, human_number, frame):
     result = subprocess.run(args, capture_output=True, text=True)
 
     print("matching_stats:", result.stdout)
+    print("errors:", result.stderr)
     if "\"num_inlier_pairs\": 0" in result.stdout:
         print("重建失败，继续重建！！！！")
         loop = True
@@ -514,6 +515,6 @@ def get_mesh(pcd_path, mesh_output_path):
     pcd=o3d.io.read_point_cloud(pcd_path, format='ply')
     print('run Poisson surface reconstruction')
     with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
-        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=10)
+        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9)
         o3d.io.write_triangle_mesh(mesh_output_path, mesh)
     

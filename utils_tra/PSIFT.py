@@ -163,7 +163,7 @@ class Psift:
                 patch = cv2.resize(patch, (32, 32), interpolation=cv2.INTER_AREA)
                 patches.append(patch)
                 valid_keypoints.append([x, y])
-        patches_tensor = torch.tensor(np.array(patches), dtype=torch.float32).unsqueeze(1)  # (N, 1, 32, 32)
+        patches_tensor = torch.tensor(np.array(patches), dtype=torch.float32).unsqueeze(1).cuda()  # (N, 1, 32, 32)
         
         
 

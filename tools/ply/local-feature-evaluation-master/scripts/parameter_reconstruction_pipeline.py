@@ -189,9 +189,9 @@ def reconstruct(args):
                             "bundle_adjuster",
                             "--input_path", os.path.join(sparse_path,'0'),
                             "--output_path", os.path.join(sparse_path,'1'),
-                            "--BundleAdjustment.refine_focal_length", '1',
-                            "--BundleAdjustment.refine_principal_point", '1',
-                            "--BundleAdjustment.refine_extrinsics", '1',
+                            "--BundleAdjustment.refine_focal_length", '0',
+                            "--BundleAdjustment.refine_principal_point", '0',
+                            "--BundleAdjustment.refine_extrinsics", '0',
                             "--BundleAdjustment.refine_extra_params", '0',
                             ],
                             stdout=f_ba, stderr=f_ba) # 重定向 stdout 和 stderr 到文件
@@ -266,6 +266,7 @@ def reconstruct(args):
                         "patch_match_stereo",
                         "--workspace_path", workspace_path,
                         "--PatchMatchStereo.geom_consistency", "false",
+                        "--PatchMatchStereo.window_radius", "10",
                        ],
                             stdout=f_ut, stderr=f_ut)
         
