@@ -6,19 +6,19 @@ from utils_tra.Hynet.model import HyNet
 from utils_tra.utils import *
 from utils_tra.eyes_mouse import get_eye_landmarks, get_mouse_landmarks
 from configs.option import get_option 
+from tqdm import tqdm
 
 def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_model, output_dir):
     base_view = opt.base_view
     # 初始化读取图像的路径
-    images_base = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(base_view).zfill(2)}/frame_{str(i).zfill(5)}.png', 0) for i in range(1, opt.frame_num+1)]
-
+    images_base = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(base_view).zfill(2)}/frame_{str(i).zfill(5)}.png', 0) for i in tqdm(range(1, opt.frame_num+1), desc='Loading images')]
     video_base = getfromvideo(opt).cuda()
 
     # 获取相机参数
-    params_base, R_base, T_base = get_k_w2c(cam_datadir, str(base_view), timestamp = 1)
+    params_base, R_base, T_base = get_k_w2c(cam_datadir, str(base_view))
 
     # 跟踪patch绑定mesh
-    _, first_frame_base_p3d,_ = get_3d_coordinates(mesh_path[0], params_base, R_base, T_base, first_frame_base)
+    _, first_frame_base_p3d= get_3d_coordinates(mesh_path[0], params_base, R_base, T_base, first_frame_base)
 
     if not first_frame_base_p3d.size > 0:  # 检查NumPy数组是否为空
         print("错误：第一帧定位关键点为空，程序终止。")
@@ -68,7 +68,7 @@ def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_mod
         
 
     # 第一帧关键点绑定点云筛选
-    pts2d, pts3d, pts3d_cam = get_3d_coordinates(mesh_path[0], params_base, R_base, T_base, points_reset)
+    pts2d, pts3d = get_3d_coordinates(mesh_path[0], params_base, R_base, T_base, points_reset)
     print("第1帧关键点检测","-----","筛选前的关键点数量", len(points_reset), "筛选后的关键点数量", len(pts2d))
     indice = [np.where((points_reset == s).all(axis=1))[0][0] for s in pts2d]# 找通过mesh绑定筛选后 有效关键点的位置
     past_pts_filter = past_points[indice]
@@ -98,8 +98,8 @@ def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_mod
         past_points, past_features = points_base_0, feature_base_0
 
         # 每帧点云绑定筛选
-        params_base, R_base, T_base = get_k_w2c(cam_datadir, str(base_view), timestamp = time+1)
-        pts2d, pts3d, pts3d_cam = get_3d_coordinates(mesh_path[time], params_base, R_base, T_base, points_reset)
+        params_base, R_base, T_base = get_k_w2c(cam_datadir, str(base_view))
+        pts2d, pts3d = get_3d_coordinates(mesh_path[time], params_base, R_base, T_base, points_reset)
         print(f"第{time+1}帧关键点检测","-----","筛选前的关键点数量", len(points_reset), "筛选后的关键点数量", len(pts2d))
         indice = [np.where((points_reset == s).all(axis=1))[0][0] for s in pts2d]
         points_filter = points_base_0[indice]
@@ -135,7 +135,7 @@ def other_view_tracker(opt, cam_datadir, first_frame_base_p3d, tracker_model, ou
         images_other = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(view).zfill(2)}/frame_{str(i).zfill(5)}.png', 0) for i in range(1, opt.frame_num+1)]
         video_other = getfromvideo(opt).cuda()
 
-        params, R, T = get_k_w2c(cam_datadir, str(view), timestamp = 1)
+        params, R, T = get_k_w2c(cam_datadir, str(view))
         
         # 确定第一帧patch关键点
         first_frame_other = reproject_points(params, R, T, first_frame_base_p3d)
@@ -158,7 +158,7 @@ def other_view_tracker(opt, cam_datadir, first_frame_base_p3d, tracker_model, ou
         all_matches = []
         
         for time in range(1, opt.frame_num):
-            params, R, T = get_k_w2c(cam_datadir, str(view), timestamp=time+1)
+            params, R, T = get_k_w2c(cam_datadir, str(view))
             points_proj = reproject_points(params, R, T, point_clouds[time]).reshape(-1, 2)
 
             patch_other = crop_regions_around_keypoints(images_other[time], landmarks_other[time], opt.patch_radius)
@@ -182,16 +182,21 @@ def other_view_tracker(opt, cam_datadir, first_frame_base_p3d, tracker_model, ou
 if __name__ == '__main__':
     HyNet_model = HyNet()
     # HyNet_model.load_state_dict(torch.load('./utils_tra/modelpath/HyNet_LIB.pth'))
-    HyNet_model.load_state_dict(torch.load('/media/Trajectory3D/models/net-best.pth'))
+    device = torch.device('cuda:0')
+    HyNet_model = HyNet_model.to(device)
+    HyNet_model.load_state_dict(torch.load('/media/Trajectory3D/models/net-best.pth', map_location=device))
+
     opt = get_option()
 
     # 正脸第一帧需要跟踪的patch中心
-    first_frame_base = np.array([[900, 1749]])
+    first_frame_base = np.array([[728, 1241]])
 
     # 相机参数路径
-    cam_datadir = f"/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh"
+    # cam_datadir = f"/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh"
+    cam_datadir = f"/media/DGST_data/Data/{opt.people_id}"
     # mesh路径
-    mesh_path= [f'/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh/{frame}/psiftproject/mesh.ply' for frame in range(1, opt.frame_num+1)]
+    # mesh_path= [f'/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh/{frame}/psiftproject/mesh.ply' for frame in range(1, opt.frame_num+1)]
+    mesh_path= [f'/media/DGST_data/Data/{opt.people_id}/mesh/mesh_{frame}.ply' for frame in range(1, opt.frame_num+1)]
     # 保存路径
     output_dir = f"/media/DGST_data/trajectory/{opt.people_id}"
 
@@ -243,6 +248,12 @@ if __name__ == '__main__':
         completed_trajectory, color_flag = complete_keypoint_trajectory(full_mat, keypoints, which_frame, keypoint_idx)
     else:
         completed_trajectory, color_flag = complete_keypoint_trajectory(full_mat, keypoints, 0, len(keypoints[0])-1)
+
+    """保存补全150轨迹数据"""
+    params, R, T = get_k_w2c(cam_datadir, '9')
+    _, pts3d_complete = get_3d_coordinates_batch(mesh_path, params, R, T, completed_trajectory)
+    with open(os.path.join(output_dir,'_xyz.json'), 'w') as file:
+        json.dump(pts3d_complete.tolist(), file)
 
     """保存完整轨迹"""
     images_base1 = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(opt.base_view).zfill(2)}/frame_{str(i).zfill(5)}.png') for i in range(1, opt.frame_num+1)]
