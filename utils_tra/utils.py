@@ -1261,6 +1261,176 @@ def draw_trajectories(match_matrices, keypoints, tracked_keypoint_coords, tracke
     out.release()
     print(f"Video saved to {output_file}")
 
+# 轨迹随时间变透明
+def draw_trajectories1(match_matrices, keypoints, tracked_keypoint_coords, tracked_keypoint_color_flags, images, output_file="output.mp4"):
+    """
+    绘制关键点轨迹并保存为 .mp4 文件。
+    轨迹颜色随时间透明度变化，越老的线段越透明。
+
+    Args:
+        match_matrices (list): 逐帧匹配矩阵列表。
+        keypoints (list): 逐帧关键点坐标列表。
+        images (list): 图像列表。
+        tracked_keypoint_coords (np.ndarray): 被跟踪关键点逐帧坐标 (总帧数, 2)。
+        tracked_keypoint_color_flags (np.ndarray): 被跟踪关键点颜色标志 (总帧数,)。
+        output_file (str): 输出视频文件名。
+    """
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    height, width, _ = images[0].shape
+    out = cv2.VideoWriter(output_file, fourcc, 20.0, (width, height))
+
+    trajectories = {}  # 存储轨迹 {轨迹ID: [(帧ID, x, y), ...]}
+    MAX_TRAJ_LENGTH = 5 # 轨迹最大可见长度
+
+    # 首先，遍历所有帧，构建完整的轨迹（不包括被跟踪关键点）
+    # 这一部分保持不变，因为它只负责构建轨迹数据
+    for frame_idx in range(len(images) - 1):
+        match_matrix = match_matrices[frame_idx]
+        current_keypoints = keypoints[frame_idx]
+        next_keypoints = keypoints[frame_idx + 1]
+
+        for i in range(len(match_matrix)):
+            for j in range(len(match_matrix[0])):
+                if match_matrix[i][j] == 1:
+                    # 检查当前关键点是否是某个现有轨迹的最新点
+                    found_trajectory = False
+                    for traj_id, traj in trajectories.items():
+                        # 注意：这里需要检查的是前一帧的最后一个点
+                        if traj[-1][0] == frame_idx and np.allclose(traj[-1][1:], current_keypoints[i]):
+                            trajectories[traj_id].append((frame_idx + 1, next_keypoints[j][0], next_keypoints[j][1]))
+                            found_trajectory = True
+                            break
+
+                    if not found_trajectory:
+                        # 如果没有找到匹配的轨迹，并且当前关键点不是任何轨迹的起始点
+                        # 检查 current_keypoints[i] 是否已经在当前帧作为某个轨迹的最新点被添加过
+                        # 这一步是为了避免重复创建轨迹
+                        is_start_of_existing_traj = False
+                        for traj in trajectories.values():
+                            if traj[0][0] == frame_idx and np.allclose(traj[0][1:], current_keypoints[i]):
+                                is_start_of_existing_traj = True
+                                break
+                        if not is_start_of_existing_traj:
+                            new_traj_id = len(trajectories) + 1
+                            trajectories[new_traj_id] = [(frame_idx, current_keypoints[i][0], current_keypoints[i][1]), 
+                                                          (frame_idx + 1, next_keypoints[j][0], next_keypoints[j][1])]
+
+    # 将被跟踪关键点的轨迹添加到 trajectories 中
+    # 确保 tracked_keypoint_coords 不为空，并且有足够的帧数
+    if len(tracked_keypoint_coords) > 0:
+        tracked_traj_id = len(trajectories) + 1
+        trajectories[tracked_traj_id] = [(f_idx, tracked_keypoint_coords[f_idx][0], tracked_keypoint_coords[f_idx][1]) 
+                                        for f_idx in range(len(tracked_keypoint_coords))]
+    else:
+        tracked_traj_id = -1 # 表示没有被跟踪的关键点轨迹
+
+    # 然后，遍历所有帧，根据轨迹信息绘制轨迹
+    for frame_idx in range(len(images)):
+        frame = images[frame_idx].copy()
+
+        for traj_id, traj in trajectories.items():
+            # 获取轨迹的基准颜色
+            base_color = (0, 0, 255) # 默认红色
+
+            # 确定这条轨迹是否与被跟踪关键点重合，并据此设置颜色
+            is_tracked_overlap = False
+            for point_idx, point_data in enumerate(traj):
+                point_frame_idx = point_data[0]
+                # 检查点是否在当前帧及之前，且在 tracked_keypoint_coords 范围内
+                if point_frame_idx <= frame_idx and point_frame_idx < len(tracked_keypoint_coords):
+                    if np.allclose(point_data[1:], tracked_keypoint_coords[point_frame_idx]):
+                        if tracked_keypoint_color_flags[point_frame_idx] == 0:
+                            base_color = (0, 255, 0) # 绿色
+                        elif tracked_keypoint_color_flags[point_frame_idx] == 1:
+                            base_color = (0, 0, 0) # 黑色
+                        is_tracked_overlap = True
+                        break # 找到重合点，确定颜色，退出内层循环
+            
+            # 如果是专门被跟踪的关键点轨迹
+            if traj_id == tracked_traj_id:
+                if frame_idx < len(tracked_keypoint_color_flags): # 确保索引在范围内
+                    if tracked_keypoint_color_flags[frame_idx] == 0:
+                        base_color = (0, 255, 0)  # 绿色
+                    elif tracked_keypoint_color_flags[frame_idx] == 1:
+                        base_color = (0, 0, 0)  # 黑色
+                else: # 如果 tracked_keypoint_color_flags 长度不够，给予默认颜色
+                    base_color = (0, 255, 0) # 默认绿色
+
+                # 绘制被跟踪关键点的轨迹
+                # 限制轨迹长度为 MAX_TRAJ_LENGTH，且只绘制到当前帧
+                start_drawing_idx = max(0, frame_idx - (MAX_TRAJ_LENGTH -1)) # 确保绘制 MAX_TRAJ_LENGTH 长度的轨迹
+                
+                for i in range(start_drawing_idx, frame_idx):
+                    pt1 = (int(tracked_keypoint_coords[i][0]), int(tracked_keypoint_coords[i][1]))
+                    pt2 = (int(tracked_keypoint_coords[i+1][0]), int(tracked_keypoint_coords[i+1][1]))
+                    
+                    # 计算当前线段在 MAX_TRAJ_LENGTH 窗口中的相对索引，用于透明度计算
+                    # 相对索引 0 是最老的，MAX_TRAJ_LENGTH-1 是最新的
+                    relative_segment_idx = i - start_drawing_idx 
+                    alpha = (relative_segment_idx + 1) / MAX_TRAJ_LENGTH # 透明度从 1/MAX_TRAJ_LENGTH 到 1.0
+
+                    if 0 <= pt1[0] < width and 0 <= pt1[1] < height and \
+                       0 <= pt2[0] < width and 0 <= pt2[1] < height:
+                        
+                        # 创建一个临时叠加层，只用于绘制当前线段
+                        overlay = frame.copy() # 或者用 np.zeros_like(frame) 如果想完全透明
+                        
+                        # 在 overlay 上绘制线段
+                        cv2.line(overlay, pt1, pt2, base_color, 2)
+                        
+                        # 混合原始图像和叠加层
+                        # frame = (1 - alpha) * frame + alpha * overlay
+                        # 或者使用 addWeighted: dst = alpha * src1 + beta * src2 + gamma
+                        # 这里我们想 overlay 上的线段是 alpha 透明度，背景是 frame
+                        frame = cv2.addWeighted(frame, 1 - alpha, overlay, alpha, 0)
+
+            else:  # 绘制其他匹配成功的轨迹
+                # 找到当前帧应该绘制的轨迹段的起始索引
+                current_point_in_traj_idx = -1
+                for i, point in enumerate(traj):
+                    if point[0] == frame_idx:
+                        current_point_in_traj_idx = i
+                        break
+                
+                # 如果轨迹在当前帧有可见点，且轨迹长度至少为 MAX_TRAJ_LENGTH
+                # 或者轨迹长度小于 MAX_TRAJ_LENGTH 但完全可见
+                if current_point_in_traj_idx != -1 and len(traj) >= 2: # 确保至少有两点才能构成线段
+                    # 确定绘制窗口的起始索引
+                    start_drawing_idx = max(0, current_point_in_traj_idx - (MAX_TRAJ_LENGTH -1))
+                    
+                    # 遍历窗口内的线段
+                    for i in range(start_drawing_idx, current_point_in_traj_idx):
+                        if i + 1 < len(traj): # 确保有下一段
+                            pt1_data = traj[i]
+                            pt2_data = traj[i+1]
+
+                            # 只有当线段的终点帧 <= 当前帧时才绘制
+                            if pt2_data[0] <= frame_idx:
+                                pt1 = (int(pt1_data[1]), int(pt1_data[2]))
+                                pt2 = (int(pt2_data[1]), int(pt2_data[2]))
+                                
+                                # 计算当前线段在 MAX_TRAJ_LENGTH 窗口中的相对索引，用于透明度计算
+                                relative_segment_idx = i - start_drawing_idx
+                                alpha = (relative_segment_idx + 1) / MAX_TRAJ_LENGTH
+                                
+                                if 0 <= pt1[0] < width and 0 <= pt1[1] < height and \
+                                   0 <= pt2[0] < width and 0 <= pt2[1] < height:
+                                    
+                                    # 创建一个临时叠加层
+                                    overlay = frame.copy() # 或者 np.zeros_like(frame)
+                                    
+                                    # 在 overlay 上绘制线段
+                                    cv2.line(overlay, pt1, pt2, base_color, 2)
+                                    
+                                    # 混合原始图像和叠加层
+                                    frame = cv2.addWeighted(frame, 1 - alpha, overlay, alpha, 0)
+
+        out.write(frame)
+
+    out.release()
+    print(f"Video saved to {output_file}")
+
 def complete_match_matrices(folder_path, base_view = '9'):
     """
     从 JSON 文件中加载匹配矩阵并进行补全。

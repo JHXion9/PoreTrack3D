@@ -64,8 +64,15 @@ def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_mod
         points_reset = np.concatenate((points_reset, mouse_point), axis=0)
        
 
-    # elif opt.position == 'mole':
-        
+    elif opt.position == 'mole':
+        mole_point = np.unravel_index(np.argmin(past_patches), past_patches.shape)
+        psift_mole = Psift(images_base[0], octave_num=2, sigma1=1.1, upSampling=False)
+        mole_feature, src = psift_mole.GetFeature_hynet(mole_point, HyNet_model)
+        mole_point_low = to_resolution(landmarks_base[0], src, opt.patch_radius)
+
+        past_points = np.concatenate((past_points, mole_point_low.reshape(1,-1)), axis=0)
+        past_features = np.concatenate((past_features, mole_feature.reshape(1,-1)), axis=0)
+        points_reset = np.concatenate((points_reset, mole_point.reshape(1,-1)), axis=0)
 
     # 第一帧关键点绑定点云筛选
     pts2d, pts3d = get_3d_coordinates(mesh_path[0], params_base, R_base, T_base, points_reset)
@@ -189,7 +196,7 @@ if __name__ == '__main__':
     opt = get_option()
 
     # 正脸第一帧需要跟踪的patch中心
-    first_frame_base = np.array([[728, 1241]])
+    first_frame_base = np.array([opt.first_xy])
 
     # 相机参数路径
     # cam_datadir = f"/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh"
@@ -198,7 +205,7 @@ if __name__ == '__main__':
     # mesh_path= [f'/media/DGST_data/Test_Data/{opt.people_id}/EMO-1-shout+laugh/{frame}/psiftproject/mesh.ply' for frame in range(1, opt.frame_num+1)]
     mesh_path= [f'/media/DGST_data/Data/{opt.people_id}/mesh/mesh_{frame}.ply' for frame in range(1, opt.frame_num+1)]
     # 保存路径
-    output_dir = f"/media/DGST_data/trajectory/{opt.people_id}"
+    output_dir = f"/media/DGST_data/trajectory/{opt.people_id}/{opt.details_pos}"
 
     # patch 使用的CoTracker跟踪
     tracker_model = CoTrackerPredictor(checkpoint='./utils_tra/cotracker/checkpoints/cotracker2.pth')
@@ -257,7 +264,7 @@ if __name__ == '__main__':
 
     """保存完整轨迹"""
     images_base1 = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(opt.base_view).zfill(2)}/frame_{str(i).zfill(5)}.png') for i in range(1, opt.frame_num+1)]
-    draw_trajectories(full_mat, keypoints, completed_trajectory, color_flag, images_base1, os.path.join(output_dir, 'output.mp4'))
+    draw_trajectories1(full_mat, keypoints, completed_trajectory, color_flag, images_base1, os.path.join(output_dir, 'output.mp4'))
 
     """3D轨迹可视化"""
     visualize_3Dtrajectories(os.path.join(output_dir, 'all_trajectory3D.json'), output_dir)
