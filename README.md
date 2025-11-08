@@ -19,6 +19,8 @@ The dataset creation pipeline also establishes a new framework for high-fidelity
   <img src="assets/056.gif" width="40%">
 </p>
 
+---
+
 ## Dataset  
 
 The full dataset can be downloaded from the [project page](https://drive.google.com/drive/folders/1M3v9vuxgaG287RORreggHuHo9efBLHLe?usp=sharing), under [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/). The dataset includes:
