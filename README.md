@@ -13,11 +13,10 @@ The dataset creation pipeline also establishes a new framework for high-fidelity
 ---
 
 
-## Demo
+## Trajectory Visualization
 <p align="center">
-  <img src="assets/063.gif" width="32%">
-  <img src="assets/056.gif" width="32%">
-  <img src="assets/264.gif" width="32%">
+  <img src="assets/063.gif" width="40%">
+  <img src="assets/056.gif" width="40%">
 </p>
 
 ## Dataset  
