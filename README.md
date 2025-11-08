@@ -1,6 +1,7 @@
 # PoreTrack3D: A Benchmark for Dynamic 3D Gaussian Splatting in Pore-Scale Facial Trajectory Tracking
+---
 
-### Project Overview  
+## Project Overview  
 PoreTrack3D is the first benchmark designed for dynamic 3D Gaussian Splatting in pore-scale, non-rigid facial trajectory tracking.
 The dataset comprises over 440,000 facial trajectories, including 52,000 sequences longer than 10 frames and 68 carefully reviewed trajectories covering the full 150-frame sequence.
 
@@ -11,13 +12,30 @@ The dataset creation pipeline also establishes a new framework for high-fidelity
 
 ---
 
+
+## Demo
+<p align="center">
+  <img src="assets/063.gif" width="32%">
+  <img src="assets/056.gif" width="32%">
+  <img src="assets/264.gif" width="32%">
+</p>
+
 ## Dataset  
-The dataset for this project is available here:  
-[👉 Google Drive Link](https://drive.google.com/drive/folders/1M3v9vuxgaG287RORreggHuHo9efBLHLe?usp=sharing)
+
+The full dataset can be downloaded from the [project page](https://drive.google.com/drive/folders/1M3v9vuxgaG287RORreggHuHo9efBLHLe?usp=sharing), under [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/). The dataset includes:
+* The initial 3D point cloud for each subject
+* Per-frame reconstructed mesh files
+* Ground-truth 3D trajectories covering both pore-scale keypoints and facial landmarks
+* Ground-truth 2D trajectories covering both pore-scale keypoints and facial landmarks
+
+Additional image data and camera parameters can be requested through the [NeRSemble](https://tobias-kirschstein.github.io/nersemble/)
+
+
+
 
 ---
 
-### Update Notice  
+## Update Notice  
 > **Note:** The author is currently occupied with other work.  
 > The project—including code organization, documentation, and dataset uploads—will be continuously updated.  
 > The full release is expected to be completed by **March 2027**.
