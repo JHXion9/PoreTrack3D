@@ -46,7 +46,7 @@ The full dataset can be downloaded from the [project page](https://drive.google.
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
 │       ├── all_trajectory2D.json    # All 2D trajectories of this position.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
-│     ├── ...
+│     |  ...
 │   | 033 
 │     ├── initial_pcd.ply   
 │     ├── mesh.ply     
