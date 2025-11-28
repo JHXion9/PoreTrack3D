@@ -23,7 +23,8 @@ The dataset creation pipeline also establishes a new framework for high-fidelity
 https://github.com/user-attachments/assets/96d62c80-9558-4c14-8606-d4814bbc838b
 
 
-你可以通过运行 `python ./scripts/review.py` 代码实现可视化。
+You can run `python ./scripts/review.py` to perform a manual review.
+
 
 
 
