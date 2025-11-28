@@ -6,6 +6,7 @@ import json
 
 from sklearn.neighbors import NearestNeighbors
 
+
 def add_keypoints_to_pointcloud(keypoints_3d, pointcloud_path):
     """
     将第一帧三维关键点添加到点云中，并替换原始点云文件

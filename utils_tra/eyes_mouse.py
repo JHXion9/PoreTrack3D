@@ -25,7 +25,9 @@ def get_eye_landmarks(image):
 
     landmarks, bboxes = torchlm.runtime.forward(image)
     # landmarks = landmarks[:,60:61]         # 左眼角
-    landmarks = landmarks[:,72:73]         # 右眼角
+    # landmarks = landmarks[:,64:65]         # 左内眼角
+    # landmarks = landmarks[:,72:73]         # 右眼角
+    landmarks = landmarks[:,68:69]         # 右内眼角
     landmarks = landmarks.squeeze(1)
 
     return landmarks
@@ -50,8 +52,8 @@ def get_mouse_landmarks(image):
     ) # will auto download pretrained weights from latest release if pretrained=True
 
     landmarks, bboxes = torchlm.runtime.forward(image)
-    landmarks = landmarks[:,76:77]         # 左嘴角
-    # landmarks = landmarks[:,82:83]         # 右嘴角
+    # landmarks = landmarks[:,76:77]         # 左嘴角
+    landmarks = landmarks[:,82:83]         # 右嘴角
     landmarks = landmarks.squeeze(1)
 
     return landmarks

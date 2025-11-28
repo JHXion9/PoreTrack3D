@@ -37,12 +37,12 @@ def process_time_step(name, start_step, end_step, completed_steps, lock):
 if __name__ == '__main__':  # 确保在 if __name__ == '__main__': 块中运行多进程代码
     start_time = time.time()  # 记录开始时间
     # 你的参数
-    human_number = '030'
+    human_number = '038_1'
     dataset_call_matlab = '/media/DGST_data/Test_Data'
     kpts_number = 10000
-    times = 1
+    times = 150
     gpu_id = 0
-    num_processes = 15 # 进程数
+    num_processes = 30 # 进程数
 
     for frame in range(1, times+1):
 
@@ -97,12 +97,12 @@ if __name__ == '__main__':  # 确保在 if __name__ == '__main__': 块中运行�
         get_descriptors(gpu_id, patch_folder_path, patch_save_path)
         # get_matches(dataset_call_matlab, human_number, frame)
         get_GMS_matches(dataset_call_matlab, human_number, frame)
-        assert 0
+        # assert 0
         human_full_path = os.path.join(dataset_call_matlab, str(human_number), f'EMO-1-shout+laugh/{frame}')
         project_path = os.path.join(human_full_path,"psiftproject")
         
         while loop:
-            loop = get_ply(project_path)
+            loop = get_ply(project_path, human_number, frame)
             if Loop_max >20:
                 print(f"重建超过20次!! 该人物第{frame}帧，重建失败！！！")
                 assert 0

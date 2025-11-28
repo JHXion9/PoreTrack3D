@@ -137,6 +137,7 @@ def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_mod
 def other_view_tracker(opt, cam_datadir, first_frame_base_p3d, tracker_model, output_dir):
     point_clouds = load_p3ds_from_json(os.path.join(output_dir, 'all_p3ds.json'))
     other_view = [ opt.base_view-2, opt.base_view+2]
+    # other_view = []
 
     for idx, view in enumerate(other_view):
         images_other = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(view).zfill(2)}/frame_{str(i).zfill(5)}.png', 0) for i in range(1, opt.frame_num+1)]
@@ -236,7 +237,7 @@ if __name__ == '__main__':
     else:
         print("No match trajectory found.")
 
-    keypoints_json = os.path.join(output_dir, "all_keypoints_9.json")
+    keypoints_json = os.path.join(output_dir, f"all_keypoints_{opt.base_view}.json")
 
     # match_matrices_list = load_match_matrices_from_json(match_matrices_json)
     keypoints = load_keypoints_from_json(keypoints_json)
@@ -257,16 +258,25 @@ if __name__ == '__main__':
         completed_trajectory, color_flag = complete_keypoint_trajectory(full_mat, keypoints, 0, len(keypoints[0])-1)
 
     """保存补全150轨迹数据"""
-    params, R, T = get_k_w2c(cam_datadir, '9')
+    params, R, T = get_k_w2c(cam_datadir, f'{opt.base_view}')
     _, pts3d_complete = get_3d_coordinates_batch(mesh_path, params, R, T, completed_trajectory)
     with open(os.path.join(output_dir,'_xyz.json'), 'w') as file:
         json.dump(pts3d_complete.tolist(), file)
 
-    """保存完整轨迹"""
-    images_base1 = [cv2.imread(f'/media/DGST_data/Data/{opt.people_id}/cam{str(opt.base_view).zfill(2)}/frame_{str(i).zfill(5)}.png') for i in range(1, opt.frame_num+1)]
-    draw_trajectories1(full_mat, keypoints, completed_trajectory, color_flag, images_base1, os.path.join(output_dir, 'output.mp4'))
+
 
     """3D轨迹可视化"""
-    visualize_3Dtrajectories(os.path.join(output_dir, 'all_trajectory3D.json'), output_dir)
+    # visualize_3Dtrajectories(os.path.join(output_dir, 'all_trajectory3D.json'), output_dir)
     """轨迹数量直方图"""
-    plot_trajectory_length_histogram(os.path.join(output_dir, 'all_trajectory2D.json'), output_dir)
+    # plot_trajectory_length_histogram(os.path.join(output_dir, 'all_trajectory2D.json'), output_dir)
+
+    """保存manual-review需要文件"""
+    manual_review_dir = os.path.join(output_dir, 'manualreview')
+    os.makedirs(manual_review_dir, exist_ok=True)
+    images_base1 = [cv2.imread(f'/media/Trajectory3D/scripts/out_enhance/{opt.people_id}/frame_{str(i).zfill(5)}.png') for i in range(1, opt.frame_num+1)]
+    with open(os.path.join(manual_review_dir,'completed_traj_2D.json'), 'w') as file:
+        json.dump(completed_trajectory.tolist(), file)
+
+    np.save(os.path.join(manual_review_dir,'color_flag.npy'), color_flag)
+
+    draw_trajectories1(full_mat, keypoints, completed_trajectory, color_flag, images_base1, f'{manual_review_dir}/output.mp4')

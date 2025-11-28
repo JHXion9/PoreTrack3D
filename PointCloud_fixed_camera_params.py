@@ -37,7 +37,7 @@ def process_time_step(name, start_step, end_step, completed_steps, lock):
 if __name__ == '__main__':  # 确保在 if __name__ == '__main__': 块中运行多进程代码
     start_time = time.time()  # 记录开始时间
     # 你的参数
-    human_number = '038'
+    human_number = '124'
     dataset_call_matlab = '/media/DGST_data/Test_Data'
     kpts_number = 10000
     times = 150

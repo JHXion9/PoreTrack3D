@@ -7,6 +7,7 @@ from utils_tra.utils import *
 from utils_tra.eyes_mouse import get_eye_landmarks, get_mouse_landmarks
 from configs.option import get_option 
 
+
 def base_view_tracker(opt, first_frame_base, cam_datadir, mesh_path, tracker_model):
     base_view = opt.base_view
     # 初始化读取图像的路径

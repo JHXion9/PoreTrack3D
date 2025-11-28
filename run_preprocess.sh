@@ -3,8 +3,6 @@ ID=$1
 python /media/Trajectory3D/tools/preprocess_for_trajectory.py -id $ID
 
 
-
-
 # Run LLFF's imgs2poses.py
 python /media/DenseGSTracking/LLFF/imgs2poses.py /media/colmap_temp/
 
