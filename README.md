@@ -33,17 +33,13 @@ You can run `python ./scripts/review.py` to perform a manual review.
 ## Dataset  
 
 The full dataset can be downloaded from the [project page](https://drive.google.com/drive/folders/1M3v9vuxgaG287RORreggHuHo9efBLHLe?usp=sharing), under [CC BY-NC-SA 4.0 license](https://creativecommons.org/licenses/by-nc-sa/4.0/). The dataset includes:
-* The initial 3D point cloud for each subject
-* Per-frame reconstructed mesh files
-* Ground-truth 3D trajectories covering both pore-scale keypoints and facial landmarks
-* Ground-truth 2D trajectories covering both pore-scale keypoints and facial landmarks
 
 ```
 ├── data
 │   | 031 
-│     ├── initial_pcd.ply            
-│     ├── mesh.ply     
+│     ├── initial_pcd.ply            # The initial 3D point cloud                
 │     ├── _xyz.json                  # 150-frame 3D trajectory for all positions.
+│     | mesh                         # Per-frame reconstructed mesh files
 │     | left_eye
 │       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
@@ -56,9 +52,9 @@ The full dataset can be downloaded from the [project page](https://drive.google.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
 │     |  ...
 │   | 033 
-│     ├── initial_pcd.ply   
-│     ├── mesh.ply     
+│     ├── initial_pcd.ply            # The initial 3D point cloud 
 │     ├── _xyz.json                  # 150-frame 3D trajectory for all positions.
+│     | mesh                         # Per-frame reconstructed mesh files
 │     | left_eye
 │       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
