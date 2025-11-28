@@ -20,7 +20,12 @@ The dataset creation pipeline also establishes a new framework for high-fidelity
 </p> -->
 
 
-https://github.com/user-attachments/assets/1cdfa790-470c-4998-b0cf-055378a05191
+https://github.com/user-attachments/assets/96d62c80-9558-4c14-8606-d4814bbc838b
+
+
+你可以通过运行 `python ./scripts/review.py` 代码实现可视化。
+
+
 
 ---
 
@@ -39,10 +44,12 @@ The full dataset can be downloaded from the [project page](https://drive.google.
 │     ├── mesh.ply     
 │     ├── _xyz.json                  # 150-frame 3D trajectory for all positions.
 │     | left_eye
+│       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
 │       ├── all_trajectory2D.json    # All 2D trajectories of this position.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
 │     | pore
+│       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
 │       ├── all_trajectory2D.json    # All 2D trajectories of this position.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
@@ -52,10 +59,12 @@ The full dataset can be downloaded from the [project page](https://drive.google.
 │     ├── mesh.ply     
 │     ├── _xyz.json                  # 150-frame 3D trajectory for all positions.
 │     | left_eye
+│       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
 │       ├── all_trajectory2D.json    # All 2D trajectories of this position.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
 │     | pore
+│       | manualreview               # for review.py
 │       ├── _xyz.json                # The 150-frame 3D trajectory of this position.
 │       ├── all_trajectory2D.json    # All 2D trajectories of this position.
 │       ├── all_trajectory3D.json    # All 3D trajectories of this position.
@@ -68,12 +77,5 @@ Additional image data and camera parameters can be requested through the [NeRSem
 
 
 
-
----
-
-## Update Notice  
-> **Note:** The author is currently occupied with other work.  
-> The project—including code organization, documentation, and dataset uploads—will be continuously updated.  
-> The full release is expected to be completed by **March 2027**.
 
 ---
